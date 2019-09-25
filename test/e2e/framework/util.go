@@ -1,10 +1,13 @@
 package framework
 
 import (
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -15,6 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	appCatalog "kmodules.xyz/custom-resources/apis/appcatalog/v1alpha1"
+	ocapps "kmodules.xyz/openshift/apis/apps/v1"
 	"stash.appscode.dev/stash/apis"
 	rep "stash.appscode.dev/stash/apis/repositories/v1alpha1"
 	api "stash.appscode.dev/stash/apis/stash/v1alpha1"
@@ -173,7 +178,7 @@ func (f *Framework) ReadSampleDataFromMountedDirectory(meta metav1.ObjectMeta, p
 		return datas, err
 	case apis.KindStatefulSet, apis.KindDaemonSet:
 		datas := make([]string, 0)
-		pods, err := f.GetAllPod(meta)
+		pods, err := f.GetAllPods(meta)
 		if err != nil {
 			return datas, err
 		}
@@ -205,7 +210,7 @@ func (f *Framework) ReadSampleDataFromFromWorkload(meta metav1.ObjectMeta, resou
 		return datas, nil
 	case apis.KindStatefulSet, apis.KindDaemonSet:
 		datas := make([]string, 0)
-		pods, err := f.GetAllPod(meta)
+		pods, err := f.GetAllPods(meta)
 		if err != nil {
 			return datas, err
 		}
@@ -629,7 +634,7 @@ func (f *Framework) CreateSampleDataInsideWorkload(meta metav1.ObjectMeta, resou
 			return err
 		}
 	case apis.KindStatefulSet, apis.KindDaemonSet:
-		pods, err := f.GetAllPod(meta)
+		pods, err := f.GetAllPods(meta)
 		if err != nil {
 			return err
 		}
@@ -656,7 +661,7 @@ func (f *Invocation) CleanupSampleDataFromWorkload(meta metav1.ObjectMeta, resou
 			return err
 		}
 	case apis.KindStatefulSet, apis.KindDaemonSet:
-		pods, err := f.GetAllPod(meta)
+		pods, err := f.GetAllPods(meta)
 		if err != nil {
 			return err
 		}
@@ -677,4 +682,111 @@ func (f *Invocation) ReadDataFromPod(meta metav1.ObjectMeta) (data string, err e
 	}
 	data, err = f.ExecOnPod(pod, "ls", "-R", TestSourceDataMountPath)
 	return data, err
+}
+
+func (f *Invocation) AppendToCleanupList(resource interface{}) {
+	f.testResources = append(f.testResources, resource)
+	return
+}
+
+func (f *Invocation) CleanupTestResources() error {
+	// delete all test resources
+	By("Cleaning Test Resources")
+	for i := range f.testResources {
+		gvr, objMeta, err := getGVRAndObjectMeta(f.testResources[i])
+		if err != nil {
+			return err
+		}
+		_ = f.dmClient.Resource(gvr).Namespace(objMeta.Namespace).Delete(objMeta.Name, deleteInBackground())
+	}
+
+	// wait until resource has been deleted
+	for i := range f.testResources {
+		gvr, objMeta, err := getGVRAndObjectMeta(f.testResources[i])
+		if err != nil {
+			return err
+		}
+		err = f.waitUntilResourceDeleted(gvr, objMeta)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (f *Invocation) waitUntilResourceDeleted(gvr schema.GroupVersionResource, objMeta metav1.ObjectMeta) error {
+	return wait.PollImmediate(PullInterval, WaitTimeOut, func() (done bool, err error) {
+		if _, err := f.dmClient.Resource(gvr).Namespace(objMeta.Namespace).Get(objMeta.Name, metav1.GetOptions{}); err != nil {
+			if kerr.IsNotFound(err) {
+				return true, nil
+			} else {
+				return true, err
+			}
+		}
+		return false, nil
+	})
+}
+
+func getGVRAndObjectMeta(obj interface{}) (schema.GroupVersionResource, metav1.ObjectMeta, error) {
+	switch obj.(type) {
+	case *apps.Deployment:
+		dp := obj.(*apps.Deployment)
+		gvk := dp.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: apis.ResourcePluralDeployment}, dp.ObjectMeta, nil
+	case *apps.DaemonSet:
+		dmn := obj.(*apps.DaemonSet)
+		gvk := dmn.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: apis.ResourcePluralDaemonSet}, dmn.ObjectMeta, nil
+	case *apps.StatefulSet:
+		ss := obj.(*apps.StatefulSet)
+		gvk := ss.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: apis.ResourcePluralStatefulSet}, ss.ObjectMeta, nil
+	case *apps.ReplicaSet:
+		rs := obj.(*apps.Deployment)
+		gvk := rs.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: apis.ResourcePluralReplicaSet}, rs.ObjectMeta, nil
+	case *core.ReplicationController:
+		rc := obj.(*core.ReplicationController)
+		gvk := rc.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: apis.ResourcePluralReplicationController}, rc.ObjectMeta, nil
+	case *ocapps.DeploymentConfig:
+		dc := obj.(*ocapps.DeploymentConfig)
+		gvk := dc.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: apis.ResourcePluralDeploymentConfig}, dc.ObjectMeta, nil
+	case *core.PersistentVolumeClaim:
+		pvc := obj.(*core.PersistentVolumeClaim)
+		gvk := pvc.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: apis.ResourcePluralPersistentVolumeClaim}, pvc.ObjectMeta, nil
+	case *appCatalog.AppBinding:
+		ab := obj.(*appCatalog.AppBinding)
+		gvk := ab.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: apis.ResourcePluralAppBinding}, ab.ObjectMeta, nil
+	case *v1beta1.BackupConfiguration:
+		bc := obj.(*v1beta1.BackupConfiguration)
+		gvk := bc.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: v1beta1.ResourcePluralBackupConfiguration}, bc.ObjectMeta, nil
+	case *v1beta1.BackupSession:
+		bs := obj.(*v1beta1.BackupSession)
+		gvk := bs.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: v1beta1.ResourcePluralBackupSession}, bs.ObjectMeta, nil
+	case *v1beta1.RestoreSession:
+		rs := obj.(*v1beta1.RestoreSession)
+		gvk := rs.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: v1beta1.ResourcePluralRestoreSession}, rs.ObjectMeta, nil
+	case *v1beta1.BackupBlueprint:
+		bb := obj.(*v1beta1.BackupBlueprint)
+		gvk := bb.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: v1beta1.ResourceKindBackupBlueprint}, bb.ObjectMeta, nil
+	case *api.Repository:
+		repo := obj.(*api.Repository)
+		gvk := repo.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: api.ResourcePluralRepository}, repo.ObjectMeta, nil
+	case *core.Secret:
+		secret := obj.(*core.Secret)
+		gvk := secret.GroupVersionKind()
+		return schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: apis.ResourcePluralSecret}, secret.ObjectMeta, nil
+	default:
+		return schema.GroupVersionResource{}, metav1.ObjectMeta{}, fmt.Errorf("failed to get GroupVersionResource. Reason: Unknown resource type")
+	}
 }

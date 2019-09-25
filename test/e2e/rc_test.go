@@ -18,7 +18,7 @@ import (
 	. "stash.appscode.dev/stash/test/e2e/matcher"
 )
 
-var _ = Describe("ReplicationController", func() {
+var _ = XDescribe("ReplicationController", func() {
 	var (
 		err          error
 		f            *framework.Invocation

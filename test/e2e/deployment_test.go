@@ -25,7 +25,7 @@ import (
 	. "stash.appscode.dev/stash/test/e2e/matcher"
 )
 
-var _ = Describe("Deployment", func() {
+var _ = XDescribe("Deployment", func() {
 	var (
 		err          error
 		f            *framework.Invocation

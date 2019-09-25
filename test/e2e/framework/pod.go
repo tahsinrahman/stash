@@ -69,7 +69,7 @@ func (f *Framework) GetPod(meta metav1.ObjectMeta) (*core.Pod, error) {
 	return nil, fmt.Errorf("no pod found for workload %v", meta.Name)
 }
 
-func (f *Framework) GetAllPod(meta metav1.ObjectMeta) ([]core.Pod, error) {
+func (f *Framework) GetAllPods(meta metav1.ObjectMeta) ([]core.Pod, error) {
 	pods := make([]core.Pod, 0)
 	labelSelector := fields.SelectorFromSet(meta.Labels)
 	podList, err := f.KubeClient.CoreV1().Pods(meta.Namespace).List(metav1.ListOptions{LabelSelector: labelSelector.String()})

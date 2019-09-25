@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/appscode/go/crypto/rand"
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"gomodules.xyz/stow"
 	apps "k8s.io/api/apps/v1"
@@ -124,7 +125,7 @@ func (f *Framework) CreateRepository(repo *api.Repository) error {
 
 }
 
-func (f *Invocation) Repository(secretName string, pvcName string) *api.Repository {
+func (f *Invocation) GetLocalRepository(secretName string, pvcName string) *api.Repository {
 	return &api.Repository{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rand.WithUniqSuffix(f.app + "-local"),
@@ -144,4 +145,27 @@ func (f *Invocation) Repository(secretName string, pvcName string) *api.Reposito
 			},
 		},
 	}
+}
+
+func (f *Invocation) SetupLocalRepository() (*api.Repository, error) {
+	// Create Storage Secret
+	By("Creating Storage Secret")
+	cred := f.SecretForLocalBackend()
+	err := f.CreateSecret(cred)
+	Expect(err).NotTo(HaveOccurred())
+	f.AppendToCleanupList(&cred)
+
+	// We are going to use an PVC as backend
+	By("Creating Backend PVC")
+	backendPVC := f.GetPersistentVolumeClaim()
+	err = f.CreatePersistentVolumeClaim(backendPVC)
+	Expect(err).NotTo(HaveOccurred())
+	f.AppendToCleanupList(backendPVC)
+
+	// Generate Repository Definition
+	repo := f.GetLocalRepository(cred.Name, backendPVC.Name)
+
+	// Create Repository
+	By("Creating Repository")
+	return f.StashClient.StashV1alpha1().Repositories(repo.Namespace).Create(repo)
 }

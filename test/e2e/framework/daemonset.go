@@ -3,6 +3,10 @@ package framework
 import (
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
+	kutil "kmodules.xyz/client-go"
+	"stash.appscode.dev/stash/pkg/util"
+
 	"github.com/appscode/go/crypto/rand"
 	. "github.com/onsi/gomega"
 	apps "k8s.io/api/apps/v1"
@@ -31,13 +35,6 @@ func (fi *Invocation) DaemonSet(pvcName string) apps.DaemonSet {
 				RollingUpdate: &apps.RollingUpdateDaemonSet{MaxUnavailable: &intstr.IntOrString{IntVal: 1}},
 			},
 		},
-	}
-	if nodes, err := fi.KubeClient.CoreV1().Nodes().List(metav1.ListOptions{}); err == nil {
-		if len(nodes.Items) > 0 {
-			daemon.Spec.Template.Spec.NodeSelector = map[string]string{
-				"kubernetes.io/hostname": nodes.Items[0].Labels["kubernetes.io/hostname"],
-			}
-		}
 	}
 	return daemon
 }
@@ -76,4 +73,60 @@ func (f *Framework) EventuallyPodAccessible(meta metav1.ObjectMeta) GomegaAsyncA
 		time.Second*2,
 	)
 
+}
+
+func (f *Invocation) WaitUntilDaemonSetReadyWithSidecar(meta metav1.ObjectMeta) error {
+	return wait.PollImmediate(kutil.RetryInterval, kutil.ReadinessTimeout, func() (bool, error) {
+		if obj, err := f.KubeClient.AppsV1().DaemonSets(meta.Namespace).Get(meta.Name, metav1.GetOptions{}); err == nil {
+			if obj.Status.DesiredNumberScheduled == obj.Status.NumberReady {
+				pods, err := f.GetAllPods(obj.ObjectMeta)
+				if err != nil {
+					return false, err
+				}
+
+				for i := range pods {
+					hasSidecar := false
+					for _, c := range pods[i].Spec.Containers {
+						if c.Name == util.StashContainer {
+							hasSidecar = true
+						}
+					}
+					if !hasSidecar {
+						return false, nil
+					}
+				}
+				return true, nil
+			}
+			return false, nil
+		}
+		return false, nil
+	})
+}
+
+func (f *Invocation) WaitUntilDaemonSetReadyWithInitContainer(meta metav1.ObjectMeta) error {
+	return wait.PollImmediate(kutil.RetryInterval, kutil.ReadinessTimeout, func() (bool, error) {
+		if obj, err := f.KubeClient.AppsV1().DaemonSets(meta.Namespace).Get(meta.Name, metav1.GetOptions{}); err == nil {
+			if obj.Status.DesiredNumberScheduled == obj.Status.NumberReady {
+				pods, err := f.GetAllPods(obj.ObjectMeta)
+				if err != nil {
+					return false, err
+				}
+
+				for i := range pods {
+					hasInitContainer := false
+					for _, c := range pods[i].Spec.InitContainers {
+						if c.Name == util.StashInitContainer {
+							hasInitContainer = true
+						}
+					}
+					if !hasInitContainer {
+						return false, nil
+					}
+				}
+				return true, nil
+			}
+			return false, nil
+		}
+		return false, nil
+	})
 }
