@@ -2,7 +2,6 @@ package workloads
 
 import (
 	"fmt"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apps "k8s.io/api/apps/v1"
@@ -22,14 +21,8 @@ var _ = Describe("Workload Test", func() {
 
 	var (
 		deployDaemonSet = func(name string) *apps.DaemonSet {
-			// We will deploy a DaemonSet with a PVC that will act as target data source
-			sourcePVC := f.GetPersistentVolumeClaim()
-			err := f.CreatePersistentVolumeClaim(sourcePVC)
-			Expect(err).NotTo(HaveOccurred())
-			f.AppendToCleanupList(sourcePVC)
-
 			// Generate DaemonSet definition
-			dmn := f.DaemonSet(sourcePVC.Name)
+			dmn := f.DaemonSet()
 			dmn.Name = name
 
 			By("Deploying DaemonSet: " + dmn.Name)
@@ -161,9 +154,9 @@ var _ = Describe("Workload Test", func() {
 				// Generate Sample Data
 				sampleData := generateSampleData(dmn)
 
-				// Setup a Local Repository
+				// Setup a GCS Repository
 				By("Creating Repository")
-				repo, err := f.SetupLocalRepository()
+				repo, err := f.SetupGCSRepository()
 				Expect(err).NotTo(HaveOccurred())
 				f.AppendToCleanupList(repo)
 
@@ -195,9 +188,9 @@ var _ = Describe("Workload Test", func() {
 			// Generate Sample Data
 			sampleData := generateSampleData(dmn)
 
-			// Setup a Local Repository
+			// Setup a GCS Repository
 			By("Creating Repository")
-			repo, err := f.SetupLocalRepository()
+			repo, err := f.SetupGCSRepository()
 			Expect(err).NotTo(HaveOccurred())
 			f.AppendToCleanupList(repo)
 

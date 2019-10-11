@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 
@@ -125,7 +126,7 @@ func (f *Framework) CreateRepository(repo *api.Repository) error {
 
 }
 
-func (f *Invocation) GetLocalRepository(secretName string, pvcName string) *api.Repository {
+func (f *Invocation) NewLocalRepository(secretName string, pvcName string) *api.Repository {
 	return &api.Repository{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rand.WithUniqSuffix(f.app + "-local"),
@@ -147,6 +148,25 @@ func (f *Invocation) GetLocalRepository(secretName string, pvcName string) *api.
 	}
 }
 
+func (f *Invocation) NewGCSRepository(secretName string) *api.Repository {
+	return &api.Repository{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      rand.WithUniqSuffix(fmt.Sprintf("gcs-%s", f.app)),
+			Namespace: f.namespace,
+		},
+		Spec: api.RepositorySpec{
+			Backend: store.Backend{
+				GCS: &store.GCSSpec{
+					Bucket: "appscode-qa",
+					Prefix: fmt.Sprintf("stash-e2e/%s/%s", f.namespace, f.app),
+				},
+				StorageSecretName: secretName,
+			},
+			WipeOut: true,
+		},
+	}
+}
+
 func (f *Invocation) SetupLocalRepository() (*api.Repository, error) {
 	// Create Storage Secret
 	By("Creating Storage Secret")
@@ -163,7 +183,27 @@ func (f *Invocation) SetupLocalRepository() (*api.Repository, error) {
 	f.AppendToCleanupList(backendPVC)
 
 	// Generate Repository Definition
-	repo := f.GetLocalRepository(cred.Name, backendPVC.Name)
+	repo := f.NewLocalRepository(cred.Name, backendPVC.Name)
+
+	// Create Repository
+	By("Creating Repository")
+	return f.StashClient.StashV1alpha1().Repositories(repo.Namespace).Create(repo)
+}
+
+func (f *Invocation) SetupGCSRepository() (*api.Repository, error) {
+	// Create Storage Secret
+	By("Creating Storage Secret")
+	cred := f.SecretForGCSBackend()
+
+	if missing, _ := BeZero().Match(cred); missing {
+		Skip("Missing GCS credential")
+	}
+	err := f.CreateSecret(cred)
+	Expect(err).NotTo(HaveOccurred())
+	f.AppendToCleanupList(&cred)
+
+	// Generate Repository Definition
+	repo := f.NewGCSRepository(cred.Name)
 
 	// Create Repository
 	By("Creating Repository")

@@ -96,7 +96,7 @@ var _ = XDescribe("Snapshots", func() {
 		pvc := f.GetPersistentVolumeClaim()
 		err := f.CreatePersistentVolumeClaim(pvc)
 		Expect(err).NotTo(HaveOccurred())
-		daemon = f.DaemonSet(pvc.Name)
+		daemon = f.DaemonSet()
 
 		deployment = f.Deployment(pvc.Name)
 		rc = f.ReplicationController(pvc.Name)
