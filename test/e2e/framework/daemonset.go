@@ -3,16 +3,15 @@ package framework
 import (
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
-	kutil "kmodules.xyz/client-go"
-	"stash.appscode.dev/stash/pkg/util"
-
 	"github.com/appscode/go/crypto/rand"
 	. "github.com/onsi/gomega"
 	apps "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
+	kutil "kmodules.xyz/client-go"
+	"stash.appscode.dev/stash/pkg/util"
 )
 
 func (fi *Invocation) DaemonSet(pvcName string) apps.DaemonSet {

@@ -3,11 +3,10 @@ package workloads
 import (
 	"fmt"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apps "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apps_util "kmodules.xyz/client-go/apps/v1"
 	"stash.appscode.dev/stash/apis"
 	api "stash.appscode.dev/stash/apis/stash/v1alpha1"
@@ -206,7 +205,7 @@ var _ = Describe("Workload Test", func() {
 			takeInstantBackup(dmn, repo)
 
 			// Deploy restored DaemonSet
-			restoredDmn:=deployDaemonSet(fmt.Sprintf("restored-daemon-%s",f.App()))
+			restoredDmn := deployDaemonSet(fmt.Sprintf("restored-daemon-%s", f.App()))
 
 			// Restore the backup data
 			By("Restoring the backed up data in the restored DaemonSet")
@@ -218,4 +217,3 @@ var _ = Describe("Workload Test", func() {
 		})
 	})
 })
-

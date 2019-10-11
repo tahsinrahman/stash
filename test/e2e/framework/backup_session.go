@@ -5,12 +5,11 @@ import (
 	"time"
 
 	"github.com/appscode/go/crypto/rand"
-	core "k8s.io/api/core/v1"
-	"stash.appscode.dev/stash/pkg/util"
-
 	. "github.com/onsi/gomega"
+	core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"stash.appscode.dev/stash/apis/stash/v1beta1"
+	"stash.appscode.dev/stash/pkg/util"
 )
 
 func (f *Framework) EventuallyBackupSessionPhase(meta metav1.ObjectMeta) GomegaAsyncAssertion {
@@ -88,7 +87,7 @@ func (f *Invocation) TriggerInstantBackup(backupConfig *v1beta1.BackupConfigurat
 			},
 		},
 		Spec: v1beta1.BackupSessionSpec{
-			BackupConfiguration: core.LocalObjectReference{
+			BackupConfiguration: &core.LocalObjectReference{
 				Name: backupConfig.Name,
 			},
 		},

@@ -27,22 +27,24 @@ func (f *Invocation) GetBackupConfigurationForWorkload(repoName string, targetRe
 			// we will use manual triggering for taking backup. this will help us to avoid waiting for fixed interval before each backup
 			// and the problem mentioned above
 			Schedule: "59 * * * *",
-			Target: &v1beta1.BackupTarget{
-				Ref: targetRef,
-				Paths: []string{
-					TestSourceDataMountPath,
-				},
-				VolumeMounts: []core.VolumeMount{
-					{
-						Name:      TestSourceDataVolumeName,
-						MountPath: TestSourceDataMountPath,
-					},
-				},
-			},
 			RetentionPolicy: v1alpha1.RetentionPolicy{
 				Name:     "keep-last-5",
 				KeepLast: 5,
 				Prune:    true,
+			},
+			BackupConfigurationTemplateSpec: v1beta1.BackupConfigurationTemplateSpec{
+				Target: &v1beta1.BackupTarget{
+					Ref: targetRef,
+					Paths: []string{
+						TestSourceDataMountPath,
+					},
+					VolumeMounts: []core.VolumeMount{
+						{
+							Name:      TestSourceDataVolumeName,
+							MountPath: TestSourceDataMountPath,
+						},
+					},
+				},
 			},
 		},
 	}
